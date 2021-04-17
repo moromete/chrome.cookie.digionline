@@ -14,48 +14,52 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   checkPageButton.addEventListener('click', function() {
+    let host =  document.getElementById('host').value;
+    chrome.storage.sync.set({ host: host }); //save setting
+    host = `ws://${host}:9090/jsonrpc`;
 
-    chrome.tabs.getSelected(null, function(tab) {
+    let data = { "jsonrpc": "2.0", 
+                  "method": "Addons.ExecuteAddon", 
+                  "params": { "wait": false, 
+                              "addonid": "plugin.video.digionline", 
+                              "params": { "DOSESSV3PRI": document.getElementById('DOSESSV3PRI').value, 
+                                          "deviceId": document.getElementById('deviceId').value, 
+                                        } 
+                            }, 
+                  "id": 1 };
+    
+    const socket = new WebSocket(host);
+    
+    // Listen for possible errors
+    socket.addEventListener('error', wsError);
 
-      let host =  document.getElementById('host').value;
-      chrome.storage.sync.set({ host: host }); //save setting
-      host = `ws://${host}:9090/jsonrpc`;
+    // Connection opened
+    socket.addEventListener('open', function (event) {
+      socket.send(JSON.stringify(data));
+    });
 
-      let data = { "jsonrpc": "2.0", 
-                   "method": "Addons.ExecuteAddon", 
-                   "params": { "wait": false, 
-                               "addonid": "plugin.video.digionline", 
-                               "params": { "DOSESSV3PRI": document.getElementById('DOSESSV3PRI').value, 
-                                           "deviceId": document.getElementById('deviceId').value, 
-                                         } 
-                             }, 
-                    "id": 1 };
-
-      const socket = new WebSocket(host);
-      
-      // Listen for possible errors
-      socket.addEventListener('error', function (event) {
-        alert('Error connectimg to ' + host);
+    // Listen for messages
+    socket.addEventListener('message', function (event) {
+      let response  = JSON.parse(event.data);
+      if(response.result == 'OK') {
+        alert('Addon setup successfully!');
+        socket.removeEventListener('error', wsError);
         socket.close();
-      });
-
-      // Connection opened
-      socket.addEventListener('open', function (event) {
-        socket.send(JSON.stringify(data));
-      });
-
-      // Listen for messages
-      socket.addEventListener('message', function (event) {
-        let response  = JSON.parse(event.data);
-        if(response.result == 'OK') {
-          alert('Addon setup successfully!');
-        }
-        socket.close();
-      });
-
+      }
     });
   }, false);
 }, false);
+
+function wsError(event) {
+  console.debug(event);
+  alert('Error connectimg to ' + event.target.url);
+}
+
+window.addEventListener("beforeunload", function(event) {
+  if(typeof socket != 'undefined') {
+    socket.close();
+  }
+});
 
 function getCookies(domain, name, callback) {
   chrome.cookies.get({"url": domain, "name": name}, (cookie) => {
